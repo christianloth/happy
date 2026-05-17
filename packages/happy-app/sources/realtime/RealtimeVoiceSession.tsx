@@ -4,6 +4,7 @@ import { registerVoiceSession } from './RealtimeSession';
 import { storage } from '@/sync/storage';
 import { realtimeClientTools } from './realtimeClientTools';
 import { getElevenLabsCodeFromPreference } from '@/constants/Languages';
+import { getVoiceLiveKitUrl, getVoiceTokenFetchUrl } from '@/sync/serverConfig';
 import type { VoiceSession, VoiceSessionConfig } from './types';
 
 // Static reference to the conversation hook instance
@@ -107,6 +108,10 @@ class RealtimeVoiceSessionImpl implements VoiceSession {
 
 export const RealtimeVoiceSession: React.FC = () => {
     const conversation = useConversation({
+        // Point the SDK at our self-hosted LiveKit + token-service. Defaults
+        // fall through to ElevenLabs when no override is set in MMKV / env.
+        serverUrl: getVoiceLiveKitUrl(),
+        tokenFetchUrl: getVoiceTokenFetchUrl(),
         clientTools: realtimeClientTools,
         onConnect: (data) => {
             console.log('Realtime session connected:', data);
