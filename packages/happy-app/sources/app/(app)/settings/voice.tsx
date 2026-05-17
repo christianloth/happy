@@ -18,6 +18,13 @@ import { sync } from '@/sync/sync';
 import { trackPaywallButtonClicked } from '@/track';
 import { getVoiceExperimentStatus, getVoiceUpsellVariantLabel } from '@/realtime/voiceExperiment';
 import { getVoiceLocalCounters, resetVoiceLocalCounters } from '@/sync/persistence';
+import {
+    getVoiceLiveKitUrl,
+    setVoiceLiveKitUrl,
+    getVoiceTokenFetchUrl,
+    setVoiceTokenFetchUrl,
+    isUsingCustomVoiceLiveKit,
+} from '@/sync/serverConfig';
 
 function formatVoiceTime(totalSeconds: number): string {
     const mins = Math.floor(totalSeconds / 60);
@@ -40,6 +47,12 @@ export default React.memo(function VoiceSettingsScreen() {
     const [usage, setUsage] = React.useState<VoiceUsageResponse | null>(null);
     const [usageLoading, setUsageLoading] = React.useState(true);
     const [voiceLocalCounters, setVoiceLocalCounters] = React.useState(() => getVoiceLocalCounters());
+
+    // Local state for the self-hosted LiveKit override so the row re-renders
+    // after the user edits via Modal.prompt without remounting the whole screen.
+    const [voiceLkUrl, setVoiceLkUrlState] = React.useState<string>(() => getVoiceLiveKitUrl());
+    const [voiceTokFetch, setVoiceTokFetchState] = React.useState<string | undefined>(() => getVoiceTokenFetchUrl());
+    const usingCustomLk = isUsingCustomVoiceLiveKit();
 
     React.useEffect(() => {
         if (!auth.credentials) return;
@@ -73,6 +86,36 @@ export default React.memo(function VoiceSettingsScreen() {
             setVoiceBypassToken(trimmed !== null);
         }
     }, [voiceCustomAgentId, setVoiceCustomAgentId, setVoiceBypassToken]);
+
+    const handleSetVoiceLkUrl = React.useCallback(async () => {
+        const value = await Modal.prompt(
+            'Voice LiveKit URL',
+            'Override the LiveKit server URL the voice SDK connects to. Use wss://livekit.<your-domain> for a self-hosted stack. Leave blank to reset to ElevenLabs.',
+            {
+                defaultValue: usingCustomLk ? voiceLkUrl : '',
+                placeholder: 'wss://livekit.example.com',
+            }
+        );
+        if (value === null) return;
+        const trimmed = value.trim();
+        setVoiceLiveKitUrl(trimmed || null);
+        setVoiceLkUrlState(getVoiceLiveKitUrl());
+    }, [voiceLkUrl, usingCustomLk]);
+
+    const handleSetVoiceTokFetch = React.useCallback(async () => {
+        const value = await Modal.prompt(
+            'Voice Token Fetch URL',
+            'Override the URL the SDK uses to mint conversation tokens in Direct Connection mode. Point this at your self-hosted token service if you also use Direct Connection.',
+            {
+                defaultValue: voiceTokFetch ?? '',
+                placeholder: 'https://tokens.example.com/v1/convai/conversation/token',
+            }
+        );
+        if (value === null) return;
+        const trimmed = value.trim();
+        setVoiceTokenFetchUrl(trimmed || null);
+        setVoiceTokFetchState(getVoiceTokenFetchUrl());
+    }, [voiceTokFetch]);
 
     const handleVoiceExperimentOverride = React.useCallback(() => {
         Modal.alert(
@@ -215,6 +258,20 @@ export default React.memo(function VoiceSettingsScreen() {
                         subtitleLines={0}
                         icon={<Ionicons name="refresh-outline" size={29} color="#FF9500" />}
                         onPress={handleResetVoiceCounters}
+                    />
+                    <Item
+                        title="Voice LiveKit URL"
+                        subtitle={usingCustomLk ? voiceLkUrl : 'ElevenLabs (default)'}
+                        subtitleLines={0}
+                        icon={<Ionicons name="cloud-outline" size={29} color={usingCustomLk ? '#34C759' : '#8E8E93'} />}
+                        onPress={handleSetVoiceLkUrl}
+                    />
+                    <Item
+                        title="Voice Token Fetch URL"
+                        subtitle={voiceTokFetch ?? 'ElevenLabs (default)'}
+                        subtitleLines={0}
+                        icon={<Ionicons name="link-outline" size={29} color={voiceTokFetch ? '#34C759' : '#8E8E93'} />}
+                        onPress={handleSetVoiceTokFetch}
                     />
                 </ItemGroup>
             )}
