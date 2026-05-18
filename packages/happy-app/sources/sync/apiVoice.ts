@@ -5,7 +5,7 @@ import {
     type VoiceUsageResponse,
 } from '@slopus/happy-wire';
 import { AuthCredentials } from '@/auth/tokenStorage';
-import { getServerUrl } from './serverConfig';
+import { getServerUrl, getVoiceTokenFetchUrl } from './serverConfig';
 import { getHappyClientId } from './apiSocket';
 import { config } from '@/config';
 
@@ -15,6 +15,24 @@ export async function fetchVoiceCredentials(
     credentials: AuthCredentials,
     sessionId: string
 ): Promise<VoiceConversationResponse> {
+    // Self-hosted path: when a custom token URL is configured, bypass Happy's
+    // backend and call our own token service directly. The token service is
+    // LAN-only (no auth required) and returns the same wire format.
+    const customTokenUrl = getVoiceTokenFetchUrl();
+    if (customTokenUrl) {
+        const response = await fetch(`${customTokenUrl}/v1/voice/conversations`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ agentId: config.elevenLabsAgentId ?? 'self-hosted' }),
+        });
+        if (!response.ok) {
+            throw new Error(`Self-hosted voice token request failed: ${response.status}`);
+        }
+        return VoiceConversationResponseSchema.parse(await response.json());
+    }
+
     const serverUrl = getServerUrl();
 
     const agentId = config.elevenLabsAgentId;
