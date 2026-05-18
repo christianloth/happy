@@ -40,7 +40,11 @@ export default React.memo(function VoiceSettingsScreen() {
     const [voiceBypassToken, setVoiceBypassToken] = useSettingMutable('voiceBypassToken');
     const [voiceUpsellOverride, setVoiceUpsellOverride] = useLocalSettingMutable('voiceUpsellOverride');
     const experiments = useSetting('experiments');
-    const devModeEnabled = __DEV__ || useLocalSetting('devModeEnabled');
+    // M6: never call a hook conditionally — always invoke useLocalSetting and
+    // then OR with __DEV__. Previously `__DEV__ || useLocalSetting(...)` would
+    // short-circuit the hook in dev, violating React's rules-of-hooks.
+    const devModeSetting = useLocalSetting('devModeEnabled');
+    const devModeEnabled = __DEV__ || devModeSetting;
 
     const hasPro = useEntitlement('pro');
 
@@ -98,6 +102,13 @@ export default React.memo(function VoiceSettingsScreen() {
         );
         if (value === null) return;
         const trimmed = value.trim();
+        // M5: validate URL. The ElevenLabs SDK rejects non-wss URLs in release
+        // builds anyway, but failing fast here gives a friendlier error than
+        // a silent connection failure later.
+        if (trimmed && !/^wss:\/\/[^\s]+$/i.test(trimmed)) {
+            Modal.alert('Invalid URL', 'Voice LiveKit URL must start with wss:// (e.g. wss://livekit.example.com).');
+            return;
+        }
         setVoiceLiveKitUrl(trimmed || null);
         setVoiceLkUrlState(getVoiceLiveKitUrl());
     }, [voiceLkUrl, usingCustomLk]);
@@ -113,6 +124,12 @@ export default React.memo(function VoiceSettingsScreen() {
         );
         if (value === null) return;
         const trimmed = value.trim();
+        // M5: validate URL. iOS App Transport Security blocks http:// in release
+        // builds — must be https.
+        if (trimmed && !/^https:\/\/[^\s]+$/i.test(trimmed)) {
+            Modal.alert('Invalid URL', 'Voice Token Fetch URL must start with https:// (e.g. https://tokens.example.com/v1/convai/conversation/token).');
+            return;
+        }
         setVoiceTokenFetchUrl(trimmed || null);
         setVoiceTokFetchState(getVoiceTokenFetchUrl());
     }, [voiceTokFetch]);
